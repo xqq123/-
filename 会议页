@@ -1,0 +1,1543 @@
+<template>
+  <div class="meet_page">
+    <!-- 头部 -->
+    <div class="meet_header" v-for="(course,index) of courseList" :key="index">
+      <div class="head_left">
+        <span>{{course.title}}</span>
+      </div>
+      <div class="head_right">
+        <div class="head_right_time"><img src="@/assets/meeting/buy_time.png" alt="">14:12:32</div>
+        <div class="head_right_time" @click="facilShow=true"><img src="@/assets/meeting/set_icon.png" alt="">设备配置</div>
+        <div class="header_back">
+          <img src="@/assets/meeting/back.png" alt="">
+          退出
+        </div>
+      </div>
+    </div>
+    <!-- 内容 -->
+    <div class="meet_content">
+      <!-- 视频 -->
+      <div class="meet_left">
+        <div class="video_item" v-for="(video,index) of videoList" :key="index" @click="videoBtn(video)" :class="[video.isShow?'video_item_border':'']">
+          <div class="video_item_name" :class="[video.isShow?'item_name_color':'']">{{video.type!=='讲师'? video.name:'讲师：'+ video.name}}</div>
+          <div class="videos">
+            <video controls>
+              <source :src="video.video" type="video/mp4">
+            </video>
+            <div class="videos_btn" v-if="video.isShow">
+              <div class="close_icon">
+                <i class="el-icon-error"></i>
+              </div>
+              <div class="voice_icon" @click="isMute = !isMute">
+                <img :src="!isMute?playIcon:muteIcon" alt="">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 工具 -->
+      <div class="meet_right">
+        <div class="right_top">
+          <div class="right_top_title">人员列表（5/{{staffList.length}})</div>
+          <div class="right_top_list">
+            <div class="right_top_item" v-for="(staff,staffId) of staffList" :key="staffId"  @contextmenu.prevent="showMenu($event,staff)" >
+              <span v-if="staff.isRaise==false">{{staff.school}} {{staff.type=='我'?'（管理员）':''}}</span>
+              <!-- 举手的情况 -->
+              <div class="right_top_raise" v-if="staff.isRaise==true">
+                <img src="@/assets/meeting/raise_icon.png" alt="">
+                {{staff.school}}
+              </div>
+              <div class="right_top_icon">
+                <!-- 授权为主讲人 -->
+                <div class="right_top_lecturer" v-if="staff.isLecturer==true">
+                  <img src="@/assets/meeting/lecturer_icon.png" alt="">
+                </div>
+                <!-- 静音 -->
+                <div @click="staff.isOpen=!staff.isOpen">
+                  <img :src="!staff.isOpen?silenceImg:silenceActive" alt="">
+                </div>
+                <!-- 摄像头 -->
+                <div @click="staff.isShow=!staff.isShow">
+                  <img :src="!staff.isShow?cameraImg:cameraActive" alt="">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 鼠标右键——权限弹窗 -->
+        <div class="power_dialog" v-show="powerShow" :style="{left:menuLeft+'px',top:menuTop+'px'}">
+          <div class="power_list">
+            <div class="power_item" v-for="(power,index) of powerList" :key="index" @click="powerBtn(index)">{{power.title}}</div>
+          </div>
+        </div>
+        <div class="right_bottom">
+        <div class="right_top_title">讨论</div>
+          <div class="chat">
+            <div v-for="(chat,index) of chats" :key="index">
+              <!-- 我的样式 -->
+              <div class="userItem myItem" v-if="chat.job=='我'">
+                <div class="me">
+                  <div><span>{{chat.name}}</span>{{chat.time}}</div>
+                  <div class="txt">{{chat.content}}</div>
+                </div>
+                <div class="via_width">
+                  <div class="via_box">
+                    <img :src="chat.via" alt="">
+                  </div>
+                </div>
+              </div>
+              <!-- 其他样式 -->
+              <div class="userItem" v-if="chat.job=='其他'">
+                <div class="via_width">
+                  <div class="via_box">
+                    <img :src="chat.via" alt="">
+                  </div>
+                </div>
+                <div class="student">
+                  <div><span>{{chat.name}}</span>{{chat.time}}</div>
+                  <div class="txt">{{chat.content}}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chat-footer">
+            <div class="import">
+              <div class="img">
+                <img src="../../assets/images/chat/face.png" alt="">
+                <img src="../../assets/images/chat/good.png" alt="">
+                <img src="../../assets/images/chat/picture.png" alt="">
+                <img src="../../assets/images/chat/flowers.png" alt="">
+              </div>
+              <div class="inputBox">
+                <el-input
+                  type="textarea"
+                  placeholder="说点什么吧！"
+                  v-model="teacherInput">
+                </el-input>
+              </div>
+            </div>
+            <el-button type="primary">发送</el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 远程调节弹窗 -->
+    <div class="long_dialog" v-if="longDialog">
+      <div class="long_box">
+        <div class="long_top">
+          <span>正在对（1020）进行远程调节</span>
+          <i @click="longDialog=false" class="el-icon-close"></i>
+        </div>
+        <div class="long_bottom">
+          <el-tabs :tab-position="tabPosition">
+            <!-- 音频设置 -->
+            <el-tab-pane label="音频设置">
+              <div class="audio_set">
+                <el-divider content-position="left">音频设置</el-divider>
+                <el-form ref="form" :model="form">
+                  <div class="audio_set_item">
+                    <div class="set_item_name">音频输入设备：</div>
+                    <el-select v-model="form.inFacility" placeholder="请选择">
+                      <el-option v-for="(item,index) in form.outFacList" :key="index" :label="item.label" :value="index+''"></el-option>
+                    </el-select>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">音频输入音量：</div>
+                    <div class="volume_box">
+                      <el-slider v-model="form.inVolume"></el-slider>
+                      <el-switch @change="volumeBtn" active-text="静音" v-model="form.isVolume"></el-switch>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">音频输出设备：</div>
+                    <el-select v-model="form.outFacility" placeholder="请选择">
+                      <el-option v-for="(item,index) in form.outFacList" :key="index" :label="item.label" :value="index+''"></el-option>
+                    </el-select>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">音频输出音量：</div>
+                    <div class="volume_box">
+                      <el-slider v-model="form.outVolume"></el-slider>
+                      <el-switch @change="volumeBtn1" active-text="静音" v-model="form.isVolume1"></el-switch>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">
+                      <el-checkbox v-model="form.isTone">音调设置：</el-checkbox>
+                    </div>
+                    <div class="volume_box">
+                      <el-slider v-model="form.tone" :disabled="!form.isTone"></el-slider>
+                      <p>当前值：{{form.tone}}</p>
+                    </div>
+                  </div>
+                  <!-- 高级设置 -->
+                  <el-divider content-position="left">高级设置</el-divider>
+                  <div class="flex_box">
+                    <div class="audio_set_item">
+                      <div class="set_item_name">音频编码方式：</div>
+                      <el-select v-model="form.coding" placeholder="请选择">
+                        <el-option v-for="(item,index) in form.codingList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                    <div class="audio_set_item">
+                      <div class="set_item_name">音频回音控制：</div>
+                      <el-select v-model="form.echo" placeholder="请选择">
+                        <el-option v-for="(item,index) in form.echoList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                  </div>
+                  <div class="flex_box">
+                    <div class="audio_set_item">
+                      <div class="set_item_name">音频噪音抑制：</div>
+                      <el-select v-model="form.noise" placeholder="请选择">
+                        <el-option v-for="(item,index) in form.noiseList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                    <div class="audio_set_item">
+                      <div class="set_item_name">音频自动增益：</div>
+                      <el-select v-model="form.gain" placeholder="请选择">
+                        <el-option v-for="(item,index) in form.gainList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                  </div>
+                  <div class="flex_box">
+                    <div class="audio_set_item">
+                      <div class="set_item_name">音频激活检测：</div>
+                      <el-select v-model="form.voiceActiva" placeholder="请选择">
+                        <el-option v-for="(item,index) in form.voiceAcList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">
+                      <el-checkbox v-model="form.isSend">不连续发送</el-checkbox>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">语音延迟补偿：</div>
+                    <div class="volume_box">
+                      <el-slider v-model="form.delay"></el-slider>
+                      <p>{{form.delay}} 毫秒</p>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">
+                      <el-checkbox v-model="form.isQualcomm">高通滤波器</el-checkbox>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">音频延迟：</div>
+                    <el-radio-group v-model="form.AudioDelay">
+                      <el-radio :label="1">60毫秒</el-radio>
+                      <el-radio :label="2">90毫秒</el-radio>
+                      <el-radio :label="3">120毫秒</el-radio>
+                    </el-radio-group>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">接收模式：</div>
+                    <el-radio-group v-model="form.ReceMode">
+                      <el-radio :label="1">默认模式</el-radio>
+                      <el-radio :label="2">自适应模式</el-radio>
+                      <el-radio :label="3">可靠模式</el-radio>
+                    </el-radio-group>
+                  </div>
+                  <div class="foot_btn">
+                    <el-button>恢复默认</el-button>
+                  </div>
+                </el-form>
+              </div>
+            </el-tab-pane>
+            <!-- 视频调节 -->
+            <el-tab-pane label="视频调节">
+              <div class="video_set">
+                <el-form ref="form" :model="videoForm">
+                  <!-- 视频设置 -->
+                  <el-divider content-position="left">视频设置</el-divider>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">视频设备：</div>
+                    <el-select v-model="videoForm.facility" placeholder="请选择">
+                      <el-option v-for="(item,index) in videoForm.facilityList" :key="index" :label="item.label" :value="index+''"></el-option>
+                    </el-select>
+                    <el-button>重命名</el-button>
+                  </div>
+                  <div class="audio_set_item">
+                    <el-checkbox v-model="videoForm.mainVideo">设为主视频</el-checkbox>
+                    <el-checkbox v-model="videoForm.banPreview">禁止远程预览该视频</el-checkbox>
+                    <el-checkbox v-model="videoForm.isRemove">移除该视频设备</el-checkbox>
+                  </div>
+                  <div class="flex_box">
+                    <div class="audio_set_item">
+                      <div class="set_item_name">本地视频分辨率：</div>
+                      <el-select v-model="videoForm.local" placeholder="请选择">
+                        <el-option v-for="(item,index) in videoForm.localList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                    <div class="audio_set_item">
+                      <div class="set_item_name">帧数：</div>
+                      <div class="volume_box">
+                        <el-slider v-model="videoForm.localResNum"></el-slider>
+                        <p>{{videoForm.localResNum}}帧</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex_box">
+                    <div class="audio_set_item">
+                      <div class="set_item_name">远端视频分辨率：</div>
+                      <el-select v-model="videoForm.far" placeholder="请选择">
+                        <el-option v-for="(item,index) in videoForm.farList" :key="index" :label="item.label" :value="index+''"></el-option>
+                      </el-select>
+                    </div>
+                    <div class="audio_set_item">
+                      <div class="set_item_name">帧数：</div>
+                      <div class="volume_box">
+                        <el-slider v-model="videoForm.farResNum"></el-slider>
+                        <p>{{videoForm.farResNum}}帧</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">远端视频品质：</div>
+                    <el-select v-model="videoForm.quality" placeholder="请选择">
+                      <el-option v-for="(item,index) in videoForm.qualityList" :key="index" :label="item.label" :value="index+''"></el-option>
+                    </el-select>
+                  </div>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">视频窗口显示名：</div>
+                    <el-input v-model="videoForm.windName"></el-input>
+                    <el-button>修改</el-button>
+                  </div>
+                  <!-- 高级设置 -->
+                  <el-divider content-position="left">高级设置</el-divider>
+                  <div class="audio_set_item">
+                    <el-checkbox v-model="videoForm.coding">使用分层视频编码</el-checkbox>
+                    <el-checkbox v-model="videoForm.shake">抑制视频抖动</el-checkbox>
+                  </div>
+                  <!-- 视频设置 -->
+                  <el-divider content-position="left">视频设置</el-divider>
+                  <div class="audio_set_item">
+                    <div class="set_item_name">视频填充方式：</div>
+                    <el-select v-model="videoForm.fill" placeholder="请选择">
+                      <el-option v-for="(item,index) in videoForm.fillList" :key="index" :label="item.label" :value="index+''"></el-option>
+                    </el-select>
+                  </div>
+                  <div class="audio_set_item">
+                    <el-checkbox v-model="videoForm.isShowUser">视频说显示用户名</el-checkbox>
+                  </div>
+                  <div class="audio_set_item">
+                    <el-checkbox v-model="videoForm.isShowVolume">在视频窗口上显示音量条</el-checkbox>
+                  </div>
+                 </el-form>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
+    </div>
+    <!-- 我的视频 -->
+    <div class="my_video">
+      <el-button @click="myVideoModel=true">我的视频窗口 ></el-button>
+    </div>
+    <div class="my_video" v-if="myVideoModel">
+      <div class="my_video_box">
+        <div class="close_btn">
+          <i @click="myVideoModel=false" class="el-icon-error"></i>
+        </div>
+        <video controls>
+          <source src="@/assets/videos/video.mp4" type="video/mp4">
+        </video>
+      </div>
+    </div>
+    <!-- 底部工具 -->
+    <div class="meet_tool">
+      <div class="meet_tool_list">
+        <div class="meet_tool_item" v-for="(tool,index) of toolsList" :key="index" @click="toolChange(index)">
+          <img :src="!tool.isChange?tool.img:tool.active" alt="">
+          <p :class="[tool.isChange?'activeColor':'']">{{tool.name}}</p>
+        </div>
+      </div>
+    </div>
+    <!-- 分屏弹窗 -->
+    <div class="split_dialog" v-if="splitDialog">
+      <div class="split_title">分屏模式</div>
+      <el-menu :default-active="Indexy" class="el-menu-demo" mode="horizontal" @select="handleSelect">
+        <el-menu-item v-for="(item,index) of splitList"
+                    :index="item.url"
+                    :key="index">
+        <img :src="item.img">
+        <div class="text"
+            slot="title">{{ item.text }}</div>
+        </el-menu-item>
+      </el-menu>
+    </div>
+    <!-- 设置配置弹窗 -->
+    <div class="facilBox" v-if="facilShow">
+      <div class="facil_bg">
+        <div class="close_icon" @click="facilShow=false">
+          <img src="@/assets/meeting/close_icon.png" alt="">
+        </div>
+        <div class="facil_text">
+          <div class="facil_text_title">设备配置</div>
+          <div class="facil_list">
+            <div class="facil_item">
+              <p>麦克风</p>
+              <div class="facil_block">
+                <span>输出音量:</span>
+                <el-slider v-model="microphone"></el-slider>
+              </div>
+            </div>
+            <div class="facil_item">
+              <p>音响</p>
+              <div class="facil_block">
+                <span>输出音量:</span>
+                <el-slider v-model="sound"></el-slider>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+export default {
+  data () {
+    return {
+      // 视频调节
+      videoForm: {
+        facility: '', // 视频设备
+        facilityList: [],
+        mainVideo: false, // 设为主视频
+        banPreview: false, // 禁止远程预览
+        isRemove: false, // 是否移除该视频
+        local: '', // 本地分辨率
+        localList: [],
+        localResNum: 5,
+        far: '', // 远端分辨率
+        farList: [],
+        farResNum: 2,
+        quality: '', // 远程视频品质
+        qualityList: [
+          {label: '极低品质(占用资源最少)'},
+          {label: '低品质'},
+          {label: '普通品质'},
+          {label: '高品质(默认)'},
+          {label: '超高品质(占用CPU和网路带宽最大)'}
+        ],
+        windName: '1020', // 视频窗口显示名
+        coding: true, // 是否分层视频编码
+        shake: true, // 是否抑制抖动
+        fill: '',
+        fillList: [
+          {label: '按比例填充'},
+          {label: '适合比例'},
+          {label: '填充窗口'}
+        ], // 填充方式
+        isShowUser: true, // 是否显示用户名
+        isShowVolume: true // 是否显示音量条
+      },
+      // 音频调节
+      form: {
+        inFacility: '', // 输入设备
+        inVolume: 10, // 输入音量
+        isVolume: false, // 是否静音
+        isVolume1: false, // 是否静音
+        outFacility: '',
+        outFacList: [
+          {label: 'PHL 273V7(英特尔(R) 显示器音频)'},
+          {label: '数字音频(S/PDIF)(显示器音频)'}
+        ], // 输出设备
+        outVolume: 20, // 是否静音
+        isTone: true, // 是否调节音调
+        tone: 23, // 音调设置
+        coding: '', // 编码方式
+        codingList: [
+          {label: 'Opus编码'},
+          {label: 'ISAC编码'},
+          {label: 'Speex编码'},
+          {label: 'ILBC编码'}
+        ],
+        echo: '', // 回音控制
+        echoList: [
+          {label: '禁用'},
+          {label: '课堂默认'},
+          {label: '声学回波消除'}
+        ],
+        noise: '', // 噪音抑制
+        noiseList: [
+          {label: '禁用'},
+          {label: '最低抑制'},
+          {label: '温和抑制'},
+          {label: '高抑制'},
+          {label: '最高抑制'}
+        ],
+        gain: '', // 增益
+        gainList: [
+          {label: '禁用'},
+          {label: '自适应模拟'},
+          {label: '自适应数字'}
+        ],
+        voiceActiva: '', // 语言激活检测
+        voiceAcList: [
+          {label: '禁用'},
+          {label: '传统检测'},
+          {label: '低质量检测'},
+          {label: '中质量检测'},
+          {label: '高质量检测'}
+        ],
+        isSend: true, // 是否连续发送
+        delay: 50, // 语音延迟补偿
+        isQualcomm: true, // 是否高通滤波器
+        AudioDelay: 1, // 音频延迟
+        ReceMode: 2 // 接收模式
+      },
+      longDialog: false, // 远程调节弹窗
+      tabPosition: 'left',
+      myVideoModel: false,
+      // 权限
+      powerShow: false,
+      powerList: [
+        {title: '授权桌面共享'},
+        {title: '授权为主讲人'},
+        {title: '授权为临时管理员'},
+        {title: '踢出课堂'},
+        {title: '远程调节'}
+      ],
+      menuObject: {}, // 右键选中对象
+      menuTop: 0, // 右键菜单距离顶部
+      menuLeft: 0, // 右键菜单距离左侧
+      teacherInput: '',
+      facilShow: false,
+      courseList: [{
+        title: '高二—重庆八中智慧云校'
+      }],
+      // 人员列表
+      silenceImg: require('@/assets/meeting/silence_befrom.png'),
+      silenceActive: require('@/assets/meeting/silence.png'),
+      cameraImg: require('@/assets/meeting/camera_befrom.png'),
+      cameraActive: require('@/assets/meeting/camera.png'),
+      staffList: [
+        {
+          type: '我', // 用户自己
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: true, // 是否举手
+          isLecturer: false // 是否设为主讲人
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: true
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        },
+        {
+          type: '其他',
+          school: '重庆八中智慧云校',
+          isOpen: false,
+          isShow: false,
+          isRaise: false,
+          isLecturer: false
+        }
+      ],
+      toolShow: false,
+      isMute: false, // 是否静音
+      playIcon: require('@/assets/meeting/voice_play.png'),
+      muteIcon: require('@/assets/meeting/voice_close.png'),
+      videoList: [
+        {type: '讲师', id: 0, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 1, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 2, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 3, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 4, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 5, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 6, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 7, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 8, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 9, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 10, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 11, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 12, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 13, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 14, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false},
+        {type: '学生', id: 15, video: require('@/assets/videos/video.mp4'), name: '张辛睿', isShow: false}
+      ],
+      // 聊天切换
+      tabsActive: '1',
+      chats: [
+        { via: require('@/assets/images/chat/via.png'), job: '我', name: '我', time: '12:22:22', content: '同学们请把课本打开到第三章第18页' },
+        { via: require('@/assets/images/chat/via.png'), job: '我', name: '我', time: '12:22:22', content: '老师讲的好好啊，真棒啊' },
+        { via: require('@/assets/images/chat/via.png'), job: '其他', name: '张晓庆', time: '12:22:22', content: '老师上一道题还没听懂，可以再讲一下吗' },
+        { via: require('@/assets/images/chat/via.png'), job: '其他', name: '张辛睿', time: '12:22:22', content: '老师讲的真好' },
+        { via: require('@/assets/images/chat/via.png'), job: '我', name: '我', time: '12:22:22', content: '老师讲的真好' },
+        { via: require('@/assets/images/chat/via.png'), job: '其他', name: '张涛', time: '12:22:22', content: '老师讲的真好' },
+        { via: require('@/assets/images/chat/via.png'), job: '其他', name: '张涛', time: '12:22:22', content: '老师讲的真好老师讲的真好老师讲的真好老师讲的真好' },
+        { via: require('@/assets/images/chat/via.png'), job: '其他', name: '张辛睿', time: '12:22:22', content: '老师讲的真好' },
+        { via: require('@/assets/images/chat/via.png'), job: '我', name: '我', time: '12:22:22', content: '老师讲的真好' }
+      ],
+      // 分屏
+      toolsList: [
+        {isChange: false, name: '桌面共享', img: require('@/assets/meeting/share_befrom.png'), active: require('@/assets/meeting/share.png')},
+        {isChange: false, name: '分屏模式', img: require('@/assets/meeting/split_befrom.png'), active: require('@/assets/meeting/split.png')},
+        {isChange: false, name: '全体静音', img: require('@/assets/meeting/mute_befrom.png'), active: require('@/assets/meeting/mute.png')},
+        {isChange: false, name: '录制', img: require('@/assets/meeting/trans_befrom.png'), active: require('@/assets/meeting/trans.png')},
+        {isChange: false, name: '全屏', img: require('@/assets/meeting/full_befrom.png'), active: require('@/assets/meeting/full.png')}
+      ],
+      splitDialog: false, // 分屏弹窗
+      // 宫格
+      Indexy: '2',
+      splitList: [
+        {text: '自由模式', url: '0', img: require('@/assets/meeting/free_schema.png')},
+        {text: '主分屏', url: '1', img: require('@/assets/meeting/split_screen.png')},
+        {text: '画中画', url: '2', img: require('@/assets/meeting/PIP.png')},
+        {text: '单画面', url: '3', img: require('@/assets/meeting/single_picture.png')},
+        {text: '二分屏', url: '4', img: require('@/assets/meeting/binary_screen.png')},
+        {text: '四分屏', url: '5', img: require('@/assets/meeting/four_split.png')},
+        {text: 'L型', url: '6', img: require('@/assets/meeting/L-form.png')},
+        {text: '反L型', url: '7', img: require('@/assets/meeting/NOL-form.png')},
+        {text: '环型', url: '8', img: require('@/assets/meeting/ring_type.png')}
+      ]
+    }
+  },
+  watch: {
+    powerShow (value) {
+      if (value) {
+        document.body.addEventListener('click', this.hideMenu)
+      } else {
+        document.body.removeEventListener('click', this.hideMenu)
+      }
+    }
+  },
+  created: {
+    handleSelect (id) {}
+  },
+  methods: {
+    volumeBtn (callback) {
+      if (callback === true) {
+        this.form.inVolume = 0
+      } else {
+        this.form.inVolume = 10
+      }
+    },
+    volumeBtn1 (callback) {
+      if (callback === true) {
+        this.form.outVolume = 0
+      } else {
+        this.form.outVolume = 20
+      }
+    },
+    // 控制调节
+    powerBtn (index) {
+      console.log(index)
+      if (index === 4) {
+        this.longDialog = true
+      }
+    },
+    // 显示右键菜单
+    showMenu (e, item) {
+      this.menuObject = item
+      var x = e.pageX
+      var y = e.pageY
+      this.menuTop = y
+      this.menuLeft = x
+      this.powerShow = true
+      console.log(x, y)
+    },
+    // 隐藏右键菜单
+    hideMenu () {
+      this.powerShow = false
+    },
+    // 鼠标右键——权限
+    mousedown (event) {
+      if (event.which === 3) {
+        this.powerShow = false
+      }
+    },
+    mouseup (event) {
+      if (event.which === 3) {
+        this.powerShow = true
+      }
+    },
+    // 视频工具显示
+    videoBtn (video) {
+      this.videoList.forEach(item => {
+        if (item.id === video.id) {
+          item.isShow = true
+        } else {
+          item.isShow = false
+        }
+      })
+    },
+    // 底部工具切换
+    toolChange (index) {
+      console.log(index)
+      this.toolsList.forEach(item => {
+        if (item.name === '分屏模式' && index === 1) {
+          item.isChange = !item.isChange
+          if (!this.splitDialog) {
+            this.splitDialog = true
+          } else {
+            this.splitDialog = false
+          }
+        }
+      })
+    },
+    // 九宫格
+    handleSelect (id) {
+      if (id) {
+        this.Indexy = id
+      }
+      this.videoList.forEach((item, i) => {
+        let a = document.getElementsByClassName('video_item')[i] // 视频模块
+        let b = document.getElementsByClassName('videos')[i]
+        let video = document.getElementsByTagName('video')[i] // 视频
+        if (id === '0' && i < 16) { // 自由模式
+          a.style.width = '24.49%'
+          a.style.height = '24.7%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '0%'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'inherit'
+          }
+          if (i === 0) {
+            a.style.float = 'inherit'
+          }
+        } else if (id === '1' && i <= 4) { // 主分屏
+          a.style.width = '30%'
+          a.style.height = '24.7%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '.22%'
+          a.style.float = 'left'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'right'
+            a.style.height = '100%'
+            a.style.width = '68.9%'
+            b.style.height = '100%'
+            video.style.height = '100%'
+          }
+        } else if (id === '2' && i < 2) { // 画中画
+          a.style.width = '99.5%'
+          a.style.height = '100%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '0%'
+          if (i === 1) {
+            a.style.backgroundColor = '#131C2C'
+            a.style.width = '25%'
+            a.style.height = '30%'
+            a.style.position = 'absolute'
+            a.style.bottom = '20px'
+            a.style.right = '20px'
+            b.style.height = '100%'
+            video.style.height = '100%'
+          }
+        } else if (id === '3' && i < 1) { // 单画面
+          a.style.width = '99.5%'
+          a.style.height = '100%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '0%'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.display = 'none'
+          }
+        } else if (id === '4' && i < 2) { // 二分屏
+          a.style.width = '49.49%'
+          a.style.height = '60%'
+          a.style.marginTop = '10%'
+          a.style.marginBottom = '20%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'inherit'
+          }
+        } else if (id === '5' && i < 4) { // 四分屏
+          a.style.width = '49.49%'
+          a.style.height = '49.6%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '.2%'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'inherit'
+          }
+        } else if (id === '6' && i < 6) { // L型
+          a.style.width = '32.8%'
+          a.style.height = '33%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '.2%'
+          a.style.float = 'left'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'right'
+            a.style.height = '66.4%'
+            a.style.width = '66.16%'
+            b.style.height = '100%'
+            video.style.height = '100%'
+          }
+        } else if (id === '7' && i < 6) { // 反L型
+          a.style.width = '32.8%'
+          a.style.height = '33%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '.2%'
+          a.style.float = 'right'
+          if (i === 0) {
+            a.style.height = '66.4%'
+            a.style.width = '66.16%'
+            b.style.height = '100%'
+            video.style.height = '100%'
+            a.style.float = 'left'
+          }
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+          }
+        } else if (id === '8' && i < 11) { // 环型
+          a.style.width = '24.49%'
+          a.style.height = '33.1%'
+          b.style.width = '100%'
+          b.style.height = '100%'
+          video.style.width = '100%'
+          video.style.height = '100%'
+          a.style.marginTop = '0%'
+          a.style.marginBottom = '0%'
+          if (i === 1) {
+            a.style.position = 'inherit'
+            a.style.bottom = '0px'
+            a.style.right = '0px'
+            a.style.float = 'inherit'
+          } else if (i === 5) {
+            a.style.width = '49.49%'
+          }
+        }
+      })
+    },
+    tabsClick () {}
+  }
+}
+</script>
+<style lang="scss" scoped>
+.meet_page{
+  height: 100vh;
+  background: #131C2C;
+  color: #fff;
+  // 头部
+  .meet_header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0vw 2vw;
+    height: 3vw;
+    background: #1E2B3B;
+    .head_left{
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .head_right{
+      display: flex;
+      font-size: 18px;
+      .head_right_time{
+        display: flex;
+        align-items: center;
+        margin-right: 3vw;
+        img{
+          height: 22px;
+          margin-right: .2vw;
+        }
+      }
+      .head_right_time:nth-child(2){
+        img{
+          height: 18px;
+        }
+      }
+      .header_back{
+        display: flex;
+        align-items: center;
+        height: 100%;
+        img{
+          height: 17px;
+          margin-right: .2vw;
+        }
+      }
+    }
+  }
+}
+.meet_content{
+  display: flex;
+  justify-content: space-between;
+  padding: 1vw;
+  box-sizing: border-box;
+  height: calc(100vh - 6.1vw);
+  overflow: hidden;
+  // 视频
+  .meet_left{
+    position: relative;
+    width: 80%;
+    margin-right: 5px;
+    text-align: left;
+    overflow: hidden;
+    height: calc(100vh - 9vw);
+    .video_item_border{
+      border: 2px solid #03BA82 !important;
+    }
+    .video_item{
+      display: inline-block;
+      width: 24.4%;
+      height: 24.4%;
+      margin: 0vw .2vw .2vw .2vw;
+      text-align: left;
+      border: 1px solid #475870;
+      box-shadow:rgba(65, 83, 107, .3) 0px 25px 40px inset;
+      overflow: hidden;
+      padding: .5vw;
+      position: relative;
+      .video_item_name{
+        position: absolute;
+        top: 1vw;
+        left: 1vw;
+        font-size: 14px;
+        color: #fff;
+        padding-bottom:.5vw;
+        z-index: 1;
+        text-shadow:1px 1px 1px #333;
+      }
+      .item_name_color{
+        color: #fff !important;
+      }
+      .videos{
+        position: relative;
+        overflow: hidden;
+        .video{
+          width: 100%;
+        }
+        .videos_btn{
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.35);
+          padding: .5vw;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          .close_icon{
+            text-align: right;
+            .el-icon-error{
+              font-size: 24px;
+              color: #b9b9b9;
+            }
+          }
+          .voice_icon{
+            img{
+              height: 21px;
+              width: auto;
+            }
+          }
+        }
+      }
+    }
+  }
+  // 工具
+  .meet_right{
+    width: 20%;
+    .right_top_title{
+      background: rgba(51, 64, 81, 0.4);
+      border-bottom: 1px solid #3D4D62;
+      text-align: left;
+      text-shadow: 0px 4px 4px #000000;
+      font-size: 18px;
+      padding: .5vw 1vw;
+    }
+    .right_top{
+      border: 1px solid #475870;
+      box-shadow:rgba(65, 83, 107, .3) 0px 25px 40px inset;
+      height: 270px;
+      .right_top_list::-webkit-scrollbar{
+        width: 0;
+      }
+      .right_top_list{
+        padding:0vw 1vw;
+        height: 228px;
+        overflow-y: scroll;
+        position: relative;
+        .right_top_item{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1vw 0vw;
+          border-bottom: 1px solid #1C283B;
+          // 举手
+          .right_top_raise{
+            color: #03BA82;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            img{
+              height: 15px;
+              margin-right: .4vw;
+            }
+          }
+          span{
+            font-size: 14px;
+            color: #E6E6E6;
+          }
+          .right_top_icon{
+            display: flex;
+            align-items: center;
+            img{
+              height: 17px;
+              margin-left: .5vw;
+            }
+          }
+        }
+
+      }
+    }
+    .power_dialog{
+          position: absolute;
+          background: #fff;
+          border-radius: 2px;
+          z-index: 3000;
+          .power_list{
+            color: #333;
+            font-size: 14px;
+            text-align: left;
+            .power_item{
+              padding: .5vw 1vw;
+              cursor: pointer;
+            }
+            .power_item:hover{
+              background: #03BA82;
+              color: #fff;
+            }
+          }
+        }
+    /deep/ .right_bottom{
+      border: 1px solid #475870;
+      box-shadow:rgba(65, 83, 107, .3) 0px 25px 40px inset;
+      margin-top: 10px;
+      // 讨论
+      .chat::-webkit-scrollbar{
+        width: 0;
+      }
+      .chat{
+        background: rgba(51, 64, 81, 0.1);
+        height: calc(100vh - 31.2vw);
+        overflow-y: scroll;
+        box-shadow:rgba(65, 83, 107, .3) 0px 25px 40px inset;
+        .userItem{
+          color: #878889;
+          font-size: 12px;
+          display: flex;
+          justify-content: start;
+          padding: 20px;
+          text-align: left;
+          .txt{
+            background-color: rgba(66, 84, 106, 0.18);
+            border-radius: .1rem;
+            padding: .2375rem .15rem;
+            margin-top: .125rem;
+            color: #E6E6E6;
+            font-size: 14px;
+          }
+          // 头像
+          .via_width{
+            width: 40px;
+          }
+          .via_box{
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            overflow: hidden;
+            margin-right: .2125rem;
+            img{
+              width: 100%;
+            }
+          }
+        }
+        // 我（主讲人）
+        .myItem{
+          display: flex;
+          justify-content:flex-end;
+          .via_box{
+            margin-left: .2125rem;
+            margin-right: 0rem;
+          }
+        }
+        .me div:first-child{
+          text-align: right !important;
+          span{
+            color: #03BA82;
+            margin-right:.5vw;
+            font-size: 16px;
+          }
+        }
+        // 其他
+        .student div:first-child{
+          span{
+            color: #e6e6e6;
+            margin-right:.5vw;
+            font-size: 16px;
+          }
+        }
+      }
+      // 输入框
+      .chat-footer{
+        text-align: right;
+        background: #233143;
+        border: 1px solid #233143;
+        height: 135px;
+        .import{
+          background: #233143;
+          .img{
+            display: flex;
+            justify-content: start;
+            align-items: center;
+            margin: .5vw 1vw;
+            img{
+              height: 20px;
+              margin-right: 1vw;
+            }
+          }
+          .inputBox{
+            position: relative;
+            overflow: hidden;
+            margin: .4vw 1vw;
+          }
+        }
+        .el-button{
+          margin: 0rem .25rem .25rem 0rem;
+          font-size: 16px;
+          padding:.35vw 1vw;
+        }
+      }
+    }
+  }
+}
+// 设备配置弹窗
+.facilBox {
+  background: rgba(0, 0, 0, 0.5);
+  background-size: 100% 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100vh;
+  z-index: 99999;
+  .facil_bg {
+    background: #1D2B3B;
+    height: 22vw;
+    color: #999;
+    position: relative;
+    z-index: 99999;
+    margin:15vw 30vw;
+    .close_icon{
+      position: absolute;
+      top: -1vw;
+      right: -1vw;
+      img{
+        width: 2.5vw;
+      }
+    }
+    .facil_text{
+      .facil_text_title{
+        background: #131C2C;
+        font-size: 20px;
+        color: #fff;
+        padding: 1vw;
+      }
+      .facil_list{
+        padding: 0vw 5.5vw;
+        .facil_item{
+          text-align: left;
+          margin-top: 2.5vw;
+          p{
+            font-size: 18px;
+            color: #fff;
+          }
+          .facil_block{
+            display: flex;
+            align-items: center;
+            width: 100%;
+            span{
+              margin-right: 1vw;
+              color: #A6AFBE;
+              font-size: 16px;
+            }
+            .el-slider{
+              width: 80%;
+            }
+            /deep/ .el-slider__runway{
+              height: 8px;
+              border-radius: 5px;
+              background: #131C2C;
+            }
+            /deep/ .el-slider__bar{
+              background-color: #03BA82;
+              height: 8px;
+              border-radius: 5px;
+            }
+            /deep/ .el-slider__button{
+              border-color: #fff;
+              width: 20px;
+              height: 20px;
+            }
+            /deep/ .el-slider__button-wrapper{
+              top:-.8vw;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+// 底部工具
+.meet_tool{
+  height: 60px;
+  width: 100%;
+  background: #0E1521;
+  .meet_tool_list{
+    width: 30%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    margin: 0 auto;
+    .meet_tool_item{
+      width: 20%;
+      text-align: center;
+      margin: 0vw 1vw;
+      img{
+        margin-top: 6px;
+        height: 27px;
+      }
+      p{
+        line-height:0px;
+        color: #A6AFBE;
+      }
+      .activeColor{
+        color: #fff;
+      }
+    }
+  }
+}
+// 分屏弹窗
+/deep/ .split_dialog{
+  background: url('../../assets/meeting/split_bg.png') no-repeat;
+  background-size: 100% 100%;
+  border-radius: 10px;
+  width: 430px;
+  height: 552px;
+  position: absolute;
+  bottom: 5vw;
+  left: 35%;
+  z-index: 10;
+  .split_title{
+    font-size: 24px;
+    font-weight: bold;
+    padding: 1.5vw 0vw;
+  }
+  .el-menu{
+    background-color: inherit;
+    border: 0;
+  }
+  .el-menu-item{
+    height: auto;
+    line-height: 65px;
+    width: 33.3%;
+    color: #F7F8FA;
+    border-bottom-color:rgba(0, 0, 0, 0) !important;
+  }
+  .el-menu-item:hover{
+    color: #fff !important;
+  }
+  .el-menu-item.is-active{
+    color: #03BA82;
+    background-color: inherit;
+    border: 0;
+    img{
+      border: 1px solid #03BA82;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+  }
+  .el-menu-item:not(.is-disabled):hover{
+    background: inherit;
+  }
+}
+.my_video{
+  position: fixed;
+  bottom: 65px;
+  right: 394px;
+  .el-button{
+    padding: .2vw .2vw .2vw .6vw;
+    background: #1E2B3B;
+    border:1px solid rgba(146, 166, 192, .2);
+    border-right: 0;
+    color: #92A6C0;
+    font-size: 14px;
+    border-radius: 17px 0px 0px 17px;
+  }
+  .my_video_box{
+    width: 250px;
+    height: 150px;
+    position: relative;
+    .close_btn{
+      position: absolute;
+      right: .5vw;
+      top: .5vw;
+      z-index: 10000;
+      i{
+        color: #253449;
+        font-size: 24px;
+      }
+    }
+    video{
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+/deep/ .el-textarea__inner::-webkit-input-placeholder {
+  color: #485566;
+  font-size: 16px;
+}
+/deep/ .el-textarea__inner{
+  background:#233143;
+  border: 0;
+  color: #fff;
+  padding: 0;
+  font-size: 16px;
+  margin: 0 !important;
+}
+/deep/ .el-textarea__inner::-webkit-scrollbar{
+  width: 0;
+}
+// 远程调节弹窗
+.long_dialog{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: rgba(0, 0, 0, .5);
+  z-index: 100;
+  .long_box{
+    background: #fff;
+    margin: 8vw 20vw;
+    height: 700px;
+    .long_top{
+      background: #03BA82;
+      padding: 1vw;
+      text-align: left;
+      font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    /deep/ .long_bottom{
+      .el-tabs__item{
+        text-align: left;
+        height: auto;
+        padding: .5vw 2vw;
+        color: #333;
+        font-size: 16px;
+      }
+      .el-tabs__active-bar{
+        width: 100%;
+        background: #03BA82;
+        box-shadow: 0px 2px 8px 0px rgba(3, 186, 130, 0.22);
+        z-index: -10;
+      }
+      .el-tabs__item.is-active{
+        color: #fff;
+        font-weight: bold;
+      }
+      .el-tabs__nav-wrap.is-left::after{
+        display: none;
+      }
+      .el-tabs--left{
+        overflow: inherit;
+      }
+      .el-tabs__header{
+        height: calc(700px - 62px);
+        box-shadow: 0px 2px 8px 0px rgba(3, 186, 130, 0.22);
+        background: #eee;
+        padding: 1vw 0vw;
+      }
+      .el-tabs__header.is-left{
+        margin: 0;
+      }
+      .el-tabs__content::-webkit-scrollbar{
+        width: 0;
+      }
+      .el-tabs__content{
+        height: calc(700px - 62px);
+        overflow-y: scroll;
+      }
+      .el-slider__bar{
+        background-color: #03BA82;
+      }
+      .el-slider__button{
+        border: 1px solid #03BA82;
+      }
+      .el-switch.is-checked .el-switch__core{
+        border-color: #03BA82;
+        background-color: #03BA82;
+      }
+      .el-checkbox__input.is-checked .el-checkbox__inner{
+        border-color: #03BA82;
+        background-color: #03BA82;
+      }
+      .el-checkbox__label{
+        font-size: 12px;
+      }
+      .el-checkbox__input.is-checked+.el-checkbox__label{
+        color: #03BA82;
+      }
+      .el-checkbox__input.is-focus .el-checkbox__inner,.el-checkbox__inner:hover{
+        border-color: #DCDFE6;
+      }
+      // 公共
+      .el-input__inner,.el-input{
+        width:200px;
+      }
+      .flex_box{
+        display: flex;
+        align-items: center;
+      }
+      .audio_set_item{
+        display: flex;
+        align-items: center;
+        margin: 1vw 1vw;
+        .set_item_name{
+          font-size: 16x;
+          width: 100px;
+          margin: 1vw 0vw;
+          color: #000;
+          margin-right: 1vw;
+          text-align: right;
+        }
+        .volume_box{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          p{
+            color: #333;
+          }
+          .el-slider{
+            width: 200px;
+            margin-right: 1vw;
+          }
+          /deep/ .el-switch__label.is-active{
+            color: #03BA82;
+          }
+        }
+        .el-button{
+          margin-left: 1vw;
+        }
+      }
+      // 音频设置
+      .audio_set{
+        padding: 1vw;
+        .foot_btn{
+          text-align: right;
+          background-color: #fff;
+          width: 100%;
+          .el-button{
+            background: #03BA82;
+            border: 1px solid #03BA82;
+            color: #fff;
+          }
+        }
+      }
+      // 视频设置
+      .video_set{
+        padding: 1vw;
+      }
+    }
+  }
+}
+</style>
